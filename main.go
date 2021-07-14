@@ -94,7 +94,6 @@ func Download() {
 		"Host": []string{"api.github.com"},
 		"Content-Type": []string{"application/json"},
 		"User-Agent": []string{"PostmanRuntime/7.28.0"},
-		"Authorization": []string{"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"},
 	}
 	
 	client := &http.Client{}
