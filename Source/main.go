@@ -80,7 +80,7 @@ func DownloadKissMP() error {
 
 	filename := git.Assets[0].Name
 
-	log.Infoln("New version available:", git.Version)
+	log.Infoln("New version available, downloading:", git.Assets[0].Name)
 
 	/* Download File */
 	utilities := Utilities{}
@@ -97,7 +97,7 @@ func DownloadKissMP() error {
 				log.Errorln("Failed downloading file.", err)
 			}
 
-			log.Infoln("Downloaded", filename)
+			log.Infoln("Successfully Downloaded", filename)
 		}
 	}
 
@@ -119,16 +119,17 @@ func DownloadKissMP() error {
 
 	var gameDirectory string = ""
 
-	if utilities.Exists(fmt.Sprintf("%s\\BeamNG.drive", os.Getenv("LocalAppData"))) {
-		gameDirectory = fmt.Sprintf("%s\\BeamNG.drive", os.Getenv("LocalAppData"))
-	} else {
-		key, err := registry.OpenKey(registry.CURRENT_USER, `SOFTWARE\BeamNG\BeamNG.drive\`, registry.QUERY_VALUE); if err != nil {
-			return err
-		}; defer key.Close()
+	key, _ := registry.OpenKey(registry.CURRENT_USER, `SOFTWARE\BeamNG\BeamNG.drive\`, registry.QUERY_VALUE)
+	defer key.Close()
 
-		gameDirectory, _, err = key.GetStringValue("userpath_override"); if err != nil {
-			return err
-		}
+	val, _, _ := key.GetStringValue("userpath_override")
+
+	if strings.Contains(val, "\\") {
+		gameDirectory = val
+		log.Infoln("Using Registry Userdata")
+	} else if utilities.Exists(fmt.Sprintf("%s\\BeamNG.drive", os.Getenv("LocalAppData"))) {
+		log.Infoln("Using Local Userdata")
+		gameDirectory = fmt.Sprintf("%s\\BeamNG.drive", os.Getenv("LocalAppData"))
 	}
 
 	log.Infoln("Game Directory Found:", gameDirectory)
