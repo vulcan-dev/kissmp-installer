@@ -1,7 +1,9 @@
 # Building #
-1. Run `go build -o installer.exe .\main.go .\utilities.go`
-> Note: You can change the build location. Replace **installer.exe** with **Build/installer.exe** (Assets and Run.ps1 must be copied over)
-2. Run `go run .\main.go .\utilities.go` or `.\installer.exe`
+1. `go mod init main`
+2. `go mod tidy`
+3. `go run -o Build/Installer.exe .\main.go .\utilities.go`  
+
+[Releases](https://github.com/vulcan-dev/kissmp-installer/releases)
 
 # Errors #
 > 1. CMD errors: Make sure the bridge is not running anywhere else  
@@ -15,9 +17,9 @@
 # Uninstalling #
 Just delete the directory and the shortcut
 
-Installing
+## Pictures ##
 ![](https://i.imgur.com/CjUXb6O.png)  
 Running 1  
 ![](https://imgur.com/Lzzr4Zi.png)  
 Running 2  
-![](https://imgur.com/21q2mNU.png) Nice VSCode
+![](https://imgur.com/21q2mNU.png)
