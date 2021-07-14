@@ -2,11 +2,9 @@ package main
 
 import (
 	"bufio"
-	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
-	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,40 +12,49 @@ import (
 	"strings"
 
 	nested "github.com/antonfisher/nested-logrus-formatter"
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 )
-
-type Git struct {
-	Version string `json:"tag_name"`
-	Assets []struct {
-		DownloadURL string `json:"browser_download_url"`
-		Name string `json:"name"`
-	}
-}
 
 const url = "https://api.github.com/repos/TheHellBox/KISS-multiplayer/releases/latest"
 
-func main() {
-	/* Initialize Logger */
-	log.SetLevel(log.DebugLevel)
+var log = InitializeLogger()
+
+func InitializeLogger() *logrus.Logger {
+	log := logrus.New()
+	log.SetLevel(logrus.DebugLevel)
 	log.SetFormatter(&nested.Formatter{
 		HideKeys:    true,
 		TimestampFormat: "2006-01-02 15:04:05",
 		TrimMessages: true,
 	})
 
+	return log
+}
+
+func main() {
+	installerVersion := "1.0.2"
 	log.Infoln("Installer made by Vitex#1248")
 
-	if Update() {
-		err := Download(); if err != nil {
+	git := &Git{}
+	git, err := git.GetJSONData("https://api.github.com/repos/vulcan-dev/kissmp-installer/releases/latest"); if err != nil {
+		log.Errorln("Something went wrong:", err.Error())
+		os.Exit(1)
+	}
+
+	if git.Version != installerVersion {
+		log.Warnln("[KissMP Installer] New update available")
+	}
+
+	if UpdateKissMP() {
+		err := DownloadKissMP(); if err != nil {
 			log.Errorln("Something went wrong:", err.Error())
 		}
 	} else {
-		err := ListenOutput(); if err != nil {
+		err := ListenPipe(); if err != nil {
 			if strings.Contains(err.Error(), "101") {
 				err = fmt.Errorf("another instance is running")
 			}
-			
+
 			log.Errorln("Something went wrong:", err.Error())
 		}
 	}
@@ -56,32 +63,17 @@ func main() {
 	bufio.NewReader(os.Stdin).ReadBytes('\n')
 }
 
-func Update() bool {
+func UpdateKissMP() bool {
 	utilities := Utilities{}
 	git := Git{}
 
 	return !utilities.Exists(fmt.Sprintf("./Downloads/Extracted/%s", git.Version))
 }
 
-func Download() error {
-	req, err := http.NewRequest("GET", url, nil); if err != nil {
-		log.Errorln(err)
-	};
-
-	req.Header = http.Header{
-		"Host": []string{"api.github.com"},
-		"Content-Type": []string{"application/json"},
-		"User-Agent": []string{"PostmanRuntime/7.28.0"},
-	}
-
-	client := &http.Client{}
-	response, err := client.Do(req); if err != nil {
-		return err
-	}
-
-	git := Git{}
-	if err = json.NewDecoder(response.Body).Decode(&git); err != nil {
-		return err
+func DownloadKissMP() error {
+	git := &Git{}
+	git, err := git.GetJSONData(url); if err != nil {
+		log.Errorln("Something went wrong:", err.Error())
 	}
 
 	filename := git.Assets[0].Name
@@ -139,9 +131,7 @@ func Download() error {
 	var latestVersionStr string = "0"
 	var latestVersion float64 = 0
     for _, item := range items {
-		ver, err := strconv.ParseFloat(item.Name(), 64); if err != nil {
-			return err
-		}
+		ver, _ := strconv.ParseFloat(item.Name(), 64)
 
 		if ver > latestVersion {
 			latestVersionStr = fmt.Sprintf("%.2f", ver)
@@ -160,7 +150,7 @@ func Download() error {
 		return err
     }
 
-	batchFile := fmt.Sprintf(`
+	shortcutFile := fmt.Sprintf(`
 		set "myPath=%%~dp0"
 		echo Set oWS = WScript.CreateObject("WScript.Shell") > CreateShortcut.vbs
 		echo sLinkFile = "%%AppData%%\\Microsoft\Windows\Start Menu\Programs\KissMP Bridge.lnk" >> CreateShortcut.vbs
@@ -175,13 +165,16 @@ func Download() error {
 		del CreateShortcut.vbs
 	`, dir, dir, dir)
 
-	file, err := os.OpenFile(fmt.Sprintf("%s\\shortcut_%s.bat", dir, git.Version), os.O_RDWR | os.O_CREATE | os.O_TRUNC, 0755); if err != nil {
-		return err
-    }
+	runFile := fmt.Sprintf(`
+	$p = Start-Process "%s/Installer.exe" -ArgumentList "invalidhost" -wait -NoNewWindow -PassThru
+	$p.HasExited
+	$p.ExitCode
+	$startExe = new-object System.Diagnostics.ProcessStartInfo -args PowerShell.exe
+	$startExe.verbs
+	`, dir)
 
-    _, err = file.Write([]byte(batchFile)); if err != nil {
-		return err
-    }; file.Close()
+	utilities.CreateFile(fmt.Sprintf("%s\\shortcut_%s.bat", dir, git.Version), []byte(shortcutFile))
+	utilities.CreateFile(fmt.Sprintf("%s\\Run.ps1", dir), []byte(runFile))
 
 	cmd := exec.Command(fmt.Sprintf("%s\\shortcut_%s.bat", dir, git.Version))
 	_, err = cmd.Output(); if err != nil {
@@ -195,13 +188,9 @@ func Download() error {
 	return err
 }
 
-func ListenOutput() error {
-	response, err := http.Get(url); if err != nil {
-		log.Errorln(err)
-	}; defer response.Body.Close()
-
-	git := Git{}
-	if err = json.NewDecoder(response.Body).Decode(&git); err != nil {
+func ListenPipe() error {
+	git := &Git{}
+	git, err := git.GetJSONData(url); if err != nil {
 		return err
 	}
 

@@ -2,6 +2,7 @@ package main
 
 import (
 	"archive/zip"
+	"encoding/json"
 	"io"
 	"net/http"
 	"os"
@@ -9,6 +10,55 @@ import (
 )
 
 type Utilities struct{}
+
+type Git struct {
+	Version string `json:"tag_name"`
+	Assets []struct {
+		DownloadURL string `json:"browser_download_url"`
+		Name string `json:"name"`
+	}
+}
+
+func (git Git) GetJSONData(url string) (*Git, error) {
+	req, err := http.NewRequest("GET", url, nil); if err != nil {
+		return nil, err
+	};
+
+	req.Header = http.Header{
+		"Host": []string{"api.github.com"},
+		"Content-Type": []string{"application/json"},
+		"User-Agent": []string{"PostmanRuntime/7.28.0"},
+	}
+	
+	auth, exists := os.LookupEnv("GITHUB_TOKEN")
+	if exists {
+		req.Header.Add("Authorization", auth)
+		log.Infoln("Using Github Auth")
+	}
+
+	client := &http.Client{}
+	response, err := client.Do(req); if err != nil {
+		return nil, err
+	}
+
+	if err = json.NewDecoder(response.Body).Decode(&git); err != nil {
+		return nil, err
+	}
+
+	return &git, err
+}
+
+func (utilities *Utilities) CreateFile(filename string, data []byte) error {
+	file, err := os.OpenFile(filename, os.O_RDWR | os.O_CREATE | os.O_TRUNC, 0755); if err != nil {
+		return err
+    }
+
+    _, err = file.Write([]byte(data)); if err != nil {
+		return err
+    }; file.Close()
+	
+	return err
+}
 
 func (utilities *Utilities) DownloadFile(url string, path string) error {
 	response, err := http.Get(url); if err != nil {
