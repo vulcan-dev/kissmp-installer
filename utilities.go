@@ -14,14 +14,14 @@ func (utilities *Utilities) DownloadFile(url string, path string) error {
 	response, err := http.Get(url); if err != nil {
 		return err
 	}; defer response.Body.Close()
-	
+
 	/* Create the File */
 	out, err := os.Create(path); if err != nil {
 		return err
 	}; defer out.Close()
 
 	_, err = io.Copy(out, response.Body)
-	
+
 	return err
 }
 
@@ -70,18 +70,18 @@ func (utilities *Utilities) DeleteDirectory(dir string) error {
     d, err := os.Open(dir)
     if err != nil {
         return err
-    }
-    defer d.Close()
-    names, err := d.Readdirnames(-1)
-    if err != nil {
+    }; defer d.Close()
+
+    names, err := d.Readdirnames(-1); if err != nil {
         return err
     }
+
     for _, name := range names {
-        err = os.RemoveAll(filepath.Join(dir, name))
-        if err != nil {
+        err = os.RemoveAll(filepath.Join(dir, name)); if err != nil {
             return err
         }
     }
+
     return nil
 }
 

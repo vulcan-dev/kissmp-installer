@@ -35,81 +35,57 @@ func main() {
 		TimestampFormat: "2006-01-02 15:04:05",
 		TrimMessages: true,
 	})
-	
-	log.Infoln("Installer made by Daniel W (Vitex#1248)")
-	
+
+	log.Infoln("Installer made by Vitex#1248")
+
 	if Update() {
-		Download()
+		err := Download(); if err != nil {
+			log.Errorln("Something went wrong:", err.Error())
+		}
 	} else {
-		response, err := http.Get(url); if err != nil {
-			log.Errorln(err)
-		}; defer response.Body.Close()
-	
-		git := Git{}
-		if err = json.NewDecoder(response.Body).Decode(&git); err != nil {
-		   log.Errorln(err)
-		   os.Exit(1)
-		}
-		
-		log.Infoln("Running with KissMP Version:", git.Version)
-
-		cmd := exec.Command(fmt.Sprintf("./Downloads/Extracted/%s/windows/kissmp-bridge.exe", git.Version))
-		cmdReader, err := cmd.StdoutPipe(); if err != nil {
-			log.Errorln("Error creating stdoutpipe.", err)
-			os.Exit(1)
-		}
-
-		scanner := bufio.NewScanner(cmdReader)
-		go func() {
-			for scanner.Scan() {
-				log.Infoln(scanner.Text(), "\n")
+		err := ListenOutput(); if err != nil {
+			if strings.Contains(err.Error(), "101") {
+				err = fmt.Errorf("another instance is running")
 			}
-		}()
-
-		if err = cmd.Start(); err != nil {
-			log.Errorln("Error starting bridge.", err)
-			os.Exit(1)
-		}
-
-		if err = cmd.Wait(); err != nil {
-			log.Errorln("Error waiting for cmd. (make sure this isn't running anywhere else)", err)
-			os.Exit(1)
+			
+			log.Errorln("Something went wrong:", err.Error())
 		}
 	}
+
+	fmt.Print("Press 'Enter' to continue...")
+	bufio.NewReader(os.Stdin).ReadBytes('\n')
 }
 
 func Update() bool {
 	utilities := Utilities{}
 	git := Git{}
-	
+
 	return !utilities.Exists(fmt.Sprintf("./Downloads/Extracted/%s", git.Version))
 }
 
-func Download() {
+func Download() error {
 	req, err := http.NewRequest("GET", url, nil); if err != nil {
 		log.Errorln(err)
 	};
-	
+
 	req.Header = http.Header{
 		"Host": []string{"api.github.com"},
 		"Content-Type": []string{"application/json"},
 		"User-Agent": []string{"PostmanRuntime/7.28.0"},
 	}
-	
+
 	client := &http.Client{}
 	response, err := client.Do(req); if err != nil {
-		log.Errorln(err)
-		os.Exit(1)
+		return err
 	}
 
 	git := Git{}
 	if err = json.NewDecoder(response.Body).Decode(&git); err != nil {
-	   log.Errorln(err)
-	   os.Exit(1)
+		return err
 	}
 
 	filename := git.Assets[0].Name
-	
+
 	log.Infoln("New version available:", git.Version)
 
 	/* Download File */
@@ -137,12 +113,14 @@ func Download() {
 
 	utilities.Unzip(fmt.Sprintf("./Downloads/%s", filename), "./Downloads/Extracted/")
 	if err := os.Rename(fmt.Sprintf("./Downloads/Extracted/%s", f), fmt.Sprintf("./Downloads/Extracted/%s", git.Version)); err != nil {
-		log.Errorln("Error renaming dir.", err)
+		return err
 	}
 
 	/* Remove mod download */
 	if utilities.Exists(fmt.Sprintf("./Downloads/%s", filename)) {
-		os.Remove(fmt.Sprintf("./Downloads/%s", filename))
+		if err := os.Remove(fmt.Sprintf("./Downloads/%s", filename)); err != nil {
+			return err
+		}
 	}
 
 	var gameDirectory string = ""
@@ -154,37 +132,34 @@ func Download() {
 
 	/* Move the mod */
 	tempMod, err := os.Open(fmt.Sprintf("./Downloads/Extracted/%s/KISSMultiplayer.zip", git.Version)); if err != nil {
-		log.Errorln("Failed moving mod.", err)
-		os.Exit(1)
+		return err
 	}; defer tempMod.Close()
-	
+
 	items, _ := ioutil.ReadDir(gameDirectory)
 	var latestVersionStr string = "0"
 	var latestVersion float64 = 0
     for _, item := range items {
-		ver, _ := strconv.ParseFloat(item.Name(), 64)
+		ver, err := strconv.ParseFloat(item.Name(), 64); if err != nil {
+			return err
+		}
+
 		if ver > latestVersion {
 			latestVersionStr = fmt.Sprintf("%.2f", ver)
 		}
     }
-	
+
 	destination, err := os.Create(fmt.Sprintf("%s\\%s\\mods\\KISSMultiplayer.zip", gameDirectory, latestVersionStr)); if err != nil {
-		log.Errorln("Failed opening mods directory.", err)
-		os.Exit(1)
+		return err
 	}; defer destination.Close()
 
 	_, err = io.Copy(destination, tempMod); if err != nil {
-		log.Errorln("Failed copying mods.", err)
-		os.Exit(1)
+		return err
 	}
-	
-	// echo oLink.TargetPath = "%%myPath%%/Downloads/Extracted/%s/windows/kissmp-bridge.exe" >> CreateShortcut.vbs
-	
-	dir, err := filepath.Abs(filepath.Dir(os.Args[0]))
-    if err != nil {
-		log.Fatal(err)
+
+	dir, err := filepath.Abs(filepath.Dir(os.Args[0])); if err != nil {
+		return err
     }
-	
+
 	batchFile := fmt.Sprintf(`
 		set "myPath=%%~dp0"
 		echo Set oWS = WScript.CreateObject("WScript.Shell") > CreateShortcut.vbs
@@ -199,28 +174,58 @@ func Download() {
 		cscript CreateShortcut.vbs
 		del CreateShortcut.vbs
 	`, dir, dir, dir)
-	
+
 	file, err := os.OpenFile(fmt.Sprintf("%s\\shortcut_%s.bat", dir, git.Version), os.O_RDWR | os.O_CREATE | os.O_TRUNC, 0755); if err != nil {
-        log.Errorln(err)
-		os.Exit(1)
+		return err
     }
 
     _, err = file.Write([]byte(batchFile)); if err != nil {
-        log.Errorln(err)
-		os.Exit(1)
+		return err
     }; file.Close()
 
 	cmd := exec.Command(fmt.Sprintf("%s\\shortcut_%s.bat", dir, git.Version))
 	_, err = cmd.Output(); if err != nil {
-		log.Errorln(err.Error())
-		os.Exit(1)
+		return err
 	}
-	
+
 	os.Remove(fmt.Sprintf("./shortcut_%s.bat", git.Version))
 
-	log.Infoln(fmt.Sprintf("KissMP %s Successfully Installed", git.Version))
+	log.Infoln("KissMP Bridge Successfully Added to Start Menu")
+
+	return err
 }
 
-func Uninstall() {
-	
+func ListenOutput() error {
+	response, err := http.Get(url); if err != nil {
+		log.Errorln(err)
+	}; defer response.Body.Close()
+
+	git := Git{}
+	if err = json.NewDecoder(response.Body).Decode(&git); err != nil {
+		return err
+	}
+
+	log.Infoln("Bridge Started (", git.Version, ")")
+
+	cmd := exec.Command(fmt.Sprintf("./Downloads/Extracted/%s/windows/kissmp-bridge.exe", git.Version))
+	cmdReader, err := cmd.StdoutPipe(); if err != nil {
+		return err
+	}
+
+	scanner := bufio.NewScanner(cmdReader)
+	go func() {
+		for scanner.Scan() {
+			log.Infoln(scanner.Text(), "\n")
+		}
+	}()
+
+	if err = cmd.Start(); err != nil {
+		return err
+	}
+
+	if err = cmd.Wait(); err != nil {
+		return err
+	}
+
+	return err
 }
