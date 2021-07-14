@@ -33,7 +33,6 @@ func (git Git) GetJSONData(url string) (*Git, error) {
 	auth, exists := os.LookupEnv("GITHUB_TOKEN")
 	if exists {
 		req.Header.Add("Authorization", auth)
-		log.Infoln("Using Github Auth")
 	}
 
 	client := &http.Client{}

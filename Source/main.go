@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 
+	"golang.org/x/sys/windows/registry"
+
 	nested "github.com/antonfisher/nested-logrus-formatter"
 	"github.com/sirupsen/logrus"
 )
@@ -119,8 +121,17 @@ func DownloadKissMP() error {
 
 	if utilities.Exists(fmt.Sprintf("%s\\BeamNG.drive", os.Getenv("LocalAppData"))) {
 		gameDirectory = fmt.Sprintf("%s\\BeamNG.drive", os.Getenv("LocalAppData"))
-		log.Infoln("Game Directory Found:", gameDirectory)
+	} else {
+		key, err := registry.OpenKey(registry.CURRENT_USER, `SOFTWARE\BeamNG\BeamNG.drive\`, registry.QUERY_VALUE); if err != nil {
+			return err
+		}; defer key.Close()
+
+		gameDirectory, _, err = key.GetStringValue("userpath_override"); if err != nil {
+			return err
+		}
 	}
+
+	log.Infoln("Game Directory Found:", gameDirectory)
 
 	/* Move the mod */
 	tempMod, err := os.Open(fmt.Sprintf("./Downloads/Extracted/%s/KISSMultiplayer.zip", git.Version)); if err != nil {
