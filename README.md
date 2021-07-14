@@ -14,3 +14,10 @@
 
 # Uninstalling #
 Just delete the directory and the shortcut
+
+Installing
+![](https://i.imgur.com/CjUXb6O.png)  
+Running 1  
+![](https://imgur.com/Lzzr4Zi.png)  
+Running 2  
+![](https://imgur.com/21q2mNU.png) Nice VSCode
