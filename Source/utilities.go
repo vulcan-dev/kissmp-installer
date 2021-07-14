@@ -17,6 +17,7 @@ type Git struct {
 		DownloadURL string `json:"browser_download_url"`
 		Name string `json:"name"`
 	}
+	Body string `json:"body"`
 }
 
 func (git Git) GetJSONData(url string) (*Git, error) {

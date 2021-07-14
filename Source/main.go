@@ -34,7 +34,7 @@ func InitializeLogger() *logrus.Logger {
 }
 
 func main() {
-	installerVersion := "1.0.3"
+	installerVersion := "1.0.2"
 	log.Infoln("Installer made by Vitex#1248")
 
 	git := &Git{}
@@ -45,6 +45,10 @@ func main() {
 
 	if git.Version != installerVersion {
 		log.Warnln("[KissMP Installer] New update available")
+		sc := bufio.NewScanner(strings.NewReader(git.Body))
+		for sc.Scan() {
+			log.Infoln("  [Update]", sc.Text())
+		}
 	}
 
 	if UpdateKissMP() {
