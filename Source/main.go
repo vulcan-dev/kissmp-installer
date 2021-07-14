@@ -34,7 +34,7 @@ func InitializeLogger() *logrus.Logger {
 }
 
 func main() {
-	installerVersion := "1.0.2"
+	installerVersion := "1.0.3"
 	log.Infoln("Installer made by Vitex#1248")
 
 	git := &Git{}
