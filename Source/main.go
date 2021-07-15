@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -17,28 +18,22 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-const url = "https://api.github.com/repos/TheHellBox/KISS-multiplayer/releases/latest"
-
 var (
 	log = InitializeLogger()
 	git = &Git{}
+	utilities = &Utilities{}
 )
 
-func InitializeLogger() *logrus.Logger {
-	log := logrus.New()
-	log.SetLevel(logrus.DebugLevel)
-	log.SetFormatter(&nested.Formatter{
-		HideKeys:    true,
-		TimestampFormat: "2006-01-02 15:04:05",
-		TrimMessages: true,
-	})
-
-	return log
-}
+const INSTALLER_VERSION = "1.0.6"
 
 func main() {
-	installerVersion := "1.0.5"
-	log.Infoln("Installer made by Vitex#1248")
+	// setup close handler so you don't get a bad exit code on interrupt
+	utilities.SetupCloseHandler()
+	
+	url := "https://api.github.com/repos/TheHellBox/KISS-multiplayer/releases/latest"
+	log.Infoln(fmt.Sprintf(`Installer made by Vitex#1248
+	Version: %s
+	`, INSTALLER_VERSION))
 
 	git, _ = git.GetJSONData(url)
 	git, err := git.GetJSONData("https://api.github.com/repos/vulcan-dev/kissmp-installer/releases/latest"); if err != nil {
@@ -46,7 +41,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	if git.Version != installerVersion && git.Version != "" {
+	// check if there's a new version of the installer
+	if git.Version != INSTALLER_VERSION && git.Version != "" {
 		log.Warnln("[KissMP Installer] New update available")
 		sc := bufio.NewScanner(strings.NewReader(git.Body))
 		for sc.Scan() {
@@ -54,47 +50,38 @@ func main() {
 		}
 	}
 
+	// there's times this fails (not sure why) so if the version is null then exit and try again in 20+ minutes.
 	if git.Version == "" {
-		log.Fatalln("Could not connect to api.github.com (Give it some time). Exiting")
+		log.Fatalln("could not connect to api.github.com (Give it some time). Exiting")
 	}
 
 	_, err = git.GetJSONData(url); if err != nil {
-		log.Errorln("Something went wrong:", err.Error())
+		log.Errorln(err.Error())
 	}
-	
 
 	if UpdateKissMP() {
 		err := DownloadKissMP(); if err != nil {
-			log.Errorln("Something went wrong:", err.Error())
+			log.Errorln(err.Error())
 		}
 	} else {
 		err := ListenPipe(); if err != nil {
-			if strings.Contains(err.Error(), "101") {
-				err = fmt.Errorf("another instance is running")
-			}
-
-			log.Errorln("Something went wrong:", err.Error())
+			log.Errorln(err.Error())
 		}
 	}
 
-	fmt.Print("Press 'Enter' to continue...")
+	log.Warnln("Press 'Enter' to exit...")
 	bufio.NewReader(os.Stdin).ReadBytes('\n')
 }
 
 func UpdateKissMP() bool {
-	utilities := Utilities{}
-
 	return !utilities.Exists(fmt.Sprintf("./Downloads/Extracted/%s", git.Version))
 }
 
 func DownloadKissMP() error {
 	filename := git.Assets[0].Name
-
 	log.Infoln("New version available, downloading:", git.Assets[0].Name)
 
-	/* Download File */
-	utilities := Utilities{}
-
+	// download the mod from github
 	if _, err := os.Stat(fmt.Sprintf("./Downloads/%s", filename)); err != nil {
 		err := utilities.DownloadFile(git.Assets[0].DownloadURL, fmt.Sprintf("./Downloads/%s", filename)); if err != nil {
 			if strings.Contains(err.Error(), "path specified") {
@@ -111,47 +98,52 @@ func DownloadKissMP() error {
 		}
 	}
 
-	/* Extract Mod */	
+	// extract the mod
 	f := filename[:strings.IndexByte(filename, '.')]
 	f = strings.ReplaceAll(f, ".", "_")
 
 	utilities.Unzip(fmt.Sprintf("./Downloads/%s", filename), "./Downloads/Extracted/")
 	if err := os.Rename(fmt.Sprintf("./Downloads/Extracted/%s", f), fmt.Sprintf("./Downloads/Extracted/%s", git.Version)); err != nil {
-		return err
+		return errors.New("failed renaming mod file" + ". error: " + err.Error())
 	}
 
-	/* Remove mod download */
+	// delete the mod after extracting
 	if utilities.Exists(fmt.Sprintf("./Downloads/%s", filename)) {
 		if err := os.Remove(fmt.Sprintf("./Downloads/%s", filename)); err != nil {
-			return err
+			return errors.New("failed deleting mod file" + ". error: " + err.Error())
 		}
 	}
 
 	var gameDirectory string = ""
 
+	// check if beamng's userpath has been overridden
 	key, _ := registry.OpenKey(registry.CURRENT_USER, `SOFTWARE\BeamNG\BeamNG.drive\`, registry.QUERY_VALUE)
 	defer key.Close()
 
 	val, _, _ := key.GetStringValue("userpath_override")
 
+	// if the registry value has a backslash then that indicates that a path was set so use this for the game directory
 	if strings.Contains(val, "\\") {
-		gameDirectory = val
 		log.Infoln("Using Registry Userdata")
-	} else if utilities.Exists(fmt.Sprintf("%s\\BeamNG.drive", os.Getenv("LocalAppData"))) {
+		gameDirectory = val
+	} else if utilities.Exists(fmt.Sprintf("%s\\BeamNG.drive", os.Getenv("LocalAppData"))) { // path has not been overridden so use the default
 		log.Infoln("Using Local Userdata")
 		gameDirectory = fmt.Sprintf("%s\\BeamNG.drive", os.Getenv("LocalAppData"))
 	}
 
 	log.Infoln("Game Directory Found:", gameDirectory)
 
-	/* Move the mod */
+	// check if the mod exists so we can copy over it to the mods directory later on
 	tempMod, err := os.Open(fmt.Sprintf("./Downloads/Extracted/%s/KISSMultiplayer.zip", git.Version)); if err != nil {
-		return err
+		return errors.New("failed opening KISSMultiplayer.zip" + ". error: " + err.Error())
 	}; defer tempMod.Close()
 
 	items, _ := ioutil.ReadDir(gameDirectory)
+
 	var latestVersionStr string = "0"
 	var latestVersion float64 = 0
+
+	// loop over each file in the game directory, if it's a number (0.x) then check if that is greater than our version
     for _, item := range items {
 		ver, _ := strconv.ParseFloat(item.Name(), 64)
 
@@ -160,16 +152,18 @@ func DownloadKissMP() error {
 		}
     }
 
+	// move the downloaded mod to beamng.drive mods directory
 	destination, err := os.Create(fmt.Sprintf("%s\\%s\\mods\\KISSMultiplayer.zip", gameDirectory, latestVersionStr)); if err != nil {
-		return err
+		return errors.New("failed creating KISSMultiplayer.zip" + ". error: " + err.Error())
 	}; defer destination.Close()
 
 	_, err = io.Copy(destination, tempMod); if err != nil {
-		return err
+		return errors.New("failed copying mod file" + ". error: " + err.Error())
 	}
 
+	// get current working directory for use with the powershell & batch scripts
 	dir, err := filepath.Abs(filepath.Dir(os.Args[0])); if err != nil {
-		return err
+		return errors.New("failed getting current working directory" + ". error: " + err.Error())
     }
 
 	shortcutFile := fmt.Sprintf(`
@@ -188,11 +182,11 @@ func DownloadKissMP() error {
 	`, dir, dir, dir)
 
 	runFile := fmt.Sprintf(`
-	$p = Start-Process "%s/Installer.exe" -ArgumentList "invalidhost" -wait -NoNewWindow -PassThru
-	$p.HasExited
-	$p.ExitCode
-	$startExe = new-object System.Diagnostics.ProcessStartInfo -args PowerShell.exe
-	$startExe.verbs
+		$p = Start-Process "%s/Installer.exe" -ArgumentList "invalidhost" -wait -NoNewWindow -PassThru
+		$p.HasExited
+		$p.ExitCode
+		$startExe = new-object System.Diagnostics.ProcessStartInfo -args PowerShell.exe
+		$startExe.verbs
 	`, dir)
 
 	utilities.CreateFile(fmt.Sprintf("%s\\shortcut_%s.bat", dir, git.Version), []byte(shortcutFile))
@@ -200,22 +194,22 @@ func DownloadKissMP() error {
 
 	cmd := exec.Command(fmt.Sprintf("%s\\shortcut_%s.bat", dir, git.Version))
 	_, err = cmd.Output(); if err != nil {
-		return err
+		return errors.New("failed getting output for cmd.Output()" + ". error: " + err.Error())
 	}
 
 	os.Remove(fmt.Sprintf("./shortcut_%s.bat", git.Version))
-
 	log.Infoln("KissMP Bridge Successfully Added to Start Menu")
 
-	return err
+	return nil
 }
 
 func ListenPipe() error {
-	log.Infoln("Bridge Started (", git.Version, ")")
+	log.Infoln("KissMP Version:", git.Version)
 
+	// execute the kissmp bridge so we can pipe the stdout data to here
 	cmd := exec.Command(fmt.Sprintf("./Downloads/Extracted/%s/windows/kissmp-bridge.exe", git.Version))
 	cmdReader, err := cmd.StdoutPipe(); if err != nil {
-		return err
+		return errors.New("failed reading stdout pipe. another instance may be running" + ". error: " + err.Error())
 	}
 
 	scanner := bufio.NewScanner(cmdReader)
@@ -226,12 +220,24 @@ func ListenPipe() error {
 	}()
 
 	if err = cmd.Start(); err != nil {
-		return err
+		return errors.New("cmd.Start() failed in f: ListenPipe" + ". error: " + err.Error())
 	}
 
 	if err = cmd.Wait(); err != nil {
-		return err
+		return errors.New("cmd.Wait() failed in f: ListenPipe" + ". error: " + err.Error())
 	}
 
-	return err
+	return nil
+}
+
+func InitializeLogger() *logrus.Logger {
+	log := logrus.New()
+	log.SetLevel(logrus.DebugLevel)
+	log.SetFormatter(&nested.Formatter{
+		HideKeys:    true,
+		TimestampFormat: "2006-01-02 15:04:05",
+		TrimMessages: true,
+	})
+
+	return log
 }

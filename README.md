@@ -1,7 +1,7 @@
 # Building #
 1. `go mod init main`
 2. `go mod tidy`
-3. `go run -o Build/Installer.exe .\main.go .\utilities.go`  
+3. `go run -o Build/Installer.exe .\main.go .\utilities.go .\git.go`  
 
 [Releases](https://github.com/vulcan-dev/kissmp-installer/releases)
 
