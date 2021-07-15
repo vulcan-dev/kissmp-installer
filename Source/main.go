@@ -52,9 +52,9 @@ func main() {
 		}
 	}
 
-	// there's times this fails (not sure why) so if the version is null then exit and try again in 20+ minutes.
+	// this can fail because you can be rate limited by the api
 	if git.Version == "" {
-		log.Fatalln("could not connect to api.github.com (Give it some time). Exiting")
+		log.Fatalln("api.github.com has limited you for sending too many requests, don't spam open the bridge. please try again in an 30-40 minutes")
 	}
 
 	_, err = git.GetJSONData(url); if err != nil {

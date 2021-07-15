@@ -28,7 +28,7 @@ func (git Git) GetJSONData(url string) (*Git, error) {
 
 	// if a token exists then use it (will prevent you from getting limited on api.gitub.com, i need to find a better way)
 	auth, exists := os.LookupEnv("GITHUB_TOKEN"); if exists {
-		req.Header.Add("Authorization", auth)
+		req.Header.Add("Authorization", "token " + auth)
 	}
 
 	client := &http.Client{}
