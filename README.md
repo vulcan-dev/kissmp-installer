@@ -1,3 +1,5 @@
+# Notes #
+I'm using colours in the terminal which only Powershell supports so if you see weird characters in command prompt then that's why.
 # Building #
 1. `go mod init main`
 2. `go mod tidy`
