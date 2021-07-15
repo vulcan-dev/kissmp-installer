@@ -6,3 +6,5 @@ Build
 *.mod
 *.sum
 *.ps1
+*.syso
+versioninfo.json
