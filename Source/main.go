@@ -19,7 +19,10 @@ import (
 
 const url = "https://api.github.com/repos/TheHellBox/KISS-multiplayer/releases/latest"
 
-var log = InitializeLogger()
+var (
+	log = InitializeLogger()
+	git = &Git{}
+)
 
 func InitializeLogger() *logrus.Logger {
 	log := logrus.New()
@@ -34,22 +37,31 @@ func InitializeLogger() *logrus.Logger {
 }
 
 func main() {
-	installerVersion := "1.0.2"
+	installerVersion := "1.0.5"
 	log.Infoln("Installer made by Vitex#1248")
 
-	git := &Git{}
+	git, _ = git.GetJSONData(url)
 	git, err := git.GetJSONData("https://api.github.com/repos/vulcan-dev/kissmp-installer/releases/latest"); if err != nil {
 		log.Errorln("Something went wrong:", err.Error())
 		os.Exit(1)
 	}
 
-	if git.Version != installerVersion {
+	if git.Version != installerVersion && git.Version != "" {
 		log.Warnln("[KissMP Installer] New update available")
 		sc := bufio.NewScanner(strings.NewReader(git.Body))
 		for sc.Scan() {
-			log.Infoln("  [Update]", sc.Text())
+			fmt.Println("\t-> " + sc.Text())
 		}
 	}
+
+	if git.Version == "" {
+		log.Fatalln("Could not connect to api.github.com (Give it some time). Exiting")
+	}
+
+	_, err = git.GetJSONData(url); if err != nil {
+		log.Errorln("Something went wrong:", err.Error())
+	}
+	
 
 	if UpdateKissMP() {
 		err := DownloadKissMP(); if err != nil {
@@ -71,17 +83,11 @@ func main() {
 
 func UpdateKissMP() bool {
 	utilities := Utilities{}
-	git := Git{}
 
 	return !utilities.Exists(fmt.Sprintf("./Downloads/Extracted/%s", git.Version))
 }
 
 func DownloadKissMP() error {
-	git := &Git{}
-	git, err := git.GetJSONData(url); if err != nil {
-		log.Errorln("Something went wrong:", err.Error())
-	}
-
 	filename := git.Assets[0].Name
 
 	log.Infoln("New version available, downloading:", git.Assets[0].Name)
@@ -205,11 +211,6 @@ func DownloadKissMP() error {
 }
 
 func ListenPipe() error {
-	git := &Git{}
-	git, err := git.GetJSONData(url); if err != nil {
-		return err
-	}
-
 	log.Infoln("Bridge Started (", git.Version, ")")
 
 	cmd := exec.Command(fmt.Sprintf("./Downloads/Extracted/%s/windows/kissmp-bridge.exe", git.Version))
