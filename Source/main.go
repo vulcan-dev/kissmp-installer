@@ -1,5 +1,12 @@
 //go:generate goversioninfo -icon=../Assets/icon.ico
 
+// cd source
+// go generate
+// go build -o ./Installer.exe
+
+// TODO Figure out how I added the icon
+// TODO Auto-launch BeamNG if process doesn't exist
+
 package main
 
 import (
@@ -17,7 +24,9 @@ import (
 	"golang.org/x/sys/windows/registry"
 
 	nested "github.com/antonfisher/nested-logrus-formatter"
+	"github.com/shirou/gopsutil/process"
 	"github.com/sirupsen/logrus"
+	"github.com/skratchdot/open-golang/open"
 )
 
 var (
@@ -205,8 +214,34 @@ func DownloadKissMP() error {
 	return nil
 }
 
+func GetProcessID(name string) (int, error) {
+	// find the process id of the process with the given name
+	var pid int = 0
+	var err error = nil
+
+	processes, err := process.Processes()
+	if err != nil {
+		return 0, errors.New("failed getting processes" + ". error: " + err.Error())
+	}
+
+	for _, proc := range processes {
+		n, _ := proc.Name();
+		if n == name {
+			pid = int(proc.Pid)
+		}
+	}
+
+	return pid, nil
+}
+
 func ListenPipe() error {
 	log.Infoln("KissMP Version:", git.Version)
+	
+	pid, _ := GetProcessID("BeamNG.drive.exe");
+	if pid == 0 {
+		log.Infoln("Launching Game")
+		open.Start("steam://rungameid/284160")
+	}
 
 	// execute the kissmp bridge so we can pipe the stdout data to here
 	cmd := exec.Command(fmt.Sprintf("./Downloads/Extracted/%s/windows/kissmp-bridge.exe", git.Version))
