@@ -35,7 +35,7 @@ var (
 	utilities = &Utilities{}
 )
 
-const INSTALLER_VERSION = "1.1.6"
+const INSTALLER_VERSION = "1.2.0"
 
 func main() {
 	// setup close handler so you don't get a bad exit code on interrupt
